@@ -83,7 +83,7 @@ src-tauri/
 # Git / GitHub
 
 - Default branch: `master`. Fluxo: feature branch → PR → merge fecha issue com **"Closes #N"** no PR/commit body.
-- Repo: `DevDanielCh/AjudaFinancasTauri` (gh CLI disponível).
+- Repo: `DevDanielCh/Ajuda-Financas` (gh CLI disponível).
 - Nunca commitar `src-tauri/gen/` nem `.next/`.
 
 # Lições aprendidas

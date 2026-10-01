@@ -49,7 +49,7 @@ A maioria dos apps de finanças exige conta, sincroniza tudo para a nuvem e usa 
 
 ## Download
 
-Baixe a versão mais recente na [página de releases](https://github.com/DevDanielCh/AjudaFinancasTauri/releases/latest):
+Baixe a versão mais recente na [página de releases](https://github.com/DevDanielCh/Ajuda-Financas/releases/latest):
 
 | Plataforma | Formato |
 |---|---|
