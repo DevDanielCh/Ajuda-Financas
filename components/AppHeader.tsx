@@ -11,6 +11,7 @@ import { SyncStatusBadge } from "@/src/Sync/SyncStatus";
 
 const TITLES: Record<string, string> = {
   "/": "Dashboard",
+  "/calendario": "Calendário",
   "/transactions": "Transações",
   "/reserva": "Reserva",
   "/installments": "Parcelamentos",

@@ -3,7 +3,9 @@ import { useRef, useState } from "react";
 import { Settings } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { MonthPicker } from "@/components/MonthPicker";
+import { YearSelector } from "@/components/screens/calendario/shared/YearSelector";
 import { useMonth } from "@/lib/month-context";
+import { useCalendarYearFilter } from "@/lib/calendar-context";
 import { cn } from "@/lib/utils";
 import { foregroundOn, initials, type AccountInfo } from "./models";
 import { useAccounts } from "./services";
@@ -19,12 +21,14 @@ export function AccountBottomNav() {
   const router = useRouter();
   const { active, isSwitching } = useAccounts();
   const { month, setMonth, min } = useMonth();
+  const { year, minYear, maxYear, setYear } = useCalendarYearFilter();
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<AccountInfo | null>(null);
   const [deleting, setDeleting] = useState<AccountInfo | null>(null);
 
   const settingsActive = pathname === "/configuracoes";
+  const isCalendar = pathname === "/calendario";
 
   return (
     <nav
@@ -51,7 +55,16 @@ export function AccountBottomNav() {
       </NavButton>
 
       <div className="flex min-w-0 flex-[2] items-center justify-center px-1">
-        <MonthPicker value={month} onChange={setMonth} min={min} compact />
+        {isCalendar ? (
+          <YearSelector
+            year={year}
+            minYear={minYear}
+            maxYear={maxYear}
+            onYearChange={setYear}
+          />
+        ) : (
+          <MonthPicker value={month} onChange={setMonth} min={min} compact />
+        )}
       </div>
 
       <NavButton

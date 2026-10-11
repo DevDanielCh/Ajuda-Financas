@@ -21,7 +21,8 @@ function Shell({ children }: { children: React.ReactNode }) {
   const { channelsOpen, setChannelsOpen } = useAccounts();
   const [editing, setEditing] = useState<AccountInfo | null>(null);
   const [deleting, setDeleting] = useState<AccountInfo | null>(null);
-  const isDashboard = usePathname() === "/";
+  const pathname = usePathname();
+  const isDashboard = pathname === "/" || pathname === "/calendario";
 
   return (
     <div className="flex h-full">
@@ -40,7 +41,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <AppHeader />
-        {/* Dashboard: scroll no próprio <main>; demais telas: painel interno rolável. */}
+        {/* Dashboard/Calendário: scroll no próprio <main>; demais telas: painel interno rolável. */}
         <main
           className={cn(
             "flex flex-col p-3 pb-28 sm:p-6",

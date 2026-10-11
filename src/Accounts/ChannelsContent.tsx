@@ -1,16 +1,27 @@
-"use client";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+"use client"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import {
-  ArrowLeftRight, CalendarClock, ChevronLeft, ChevronRight, CreditCard, Landmark,
-  LayoutDashboard, PiggyBank, RefreshCw, Tags,
-} from "lucide-react";
-import { MonthPicker } from "@/components/MonthPicker";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { useMonth } from "@/lib/month-context";
-import { shiftMonth } from "@/lib/format";
-import { useAccounts } from "./services";
+  ArrowLeftRight,
+  CalendarClock,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  CreditCard,
+  Landmark,
+  LayoutDashboard,
+  PiggyBank,
+  RefreshCw,
+  Tags,
+} from "lucide-react"
+import { MonthPicker } from "@/components/MonthPicker"
+import { YearSelector } from "@/components/screens/calendario/shared/YearSelector"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
+import { useMonth } from "@/lib/month-context"
+import { useCalendarYearFilter } from "@/lib/calendar-context"
+import { shiftMonth } from "@/lib/format"
+import { useAccounts } from "./services"
 
 export const MODULE_GROUPS = [
   {
@@ -20,57 +31,78 @@ export const MODULE_GROUPS = [
       { href: "/fixed-bills", label: "Contas Fixas", icon: RefreshCw },
       { href: "/installments", label: "Parcelamentos", icon: CalendarClock },
       { href: "/loans", label: "Financiamentos", icon: Landmark },
-      { href: "/payment-methods", label: "Formas de Pagamento", icon: CreditCard },
+      {
+        href: "/payment-methods",
+        label: "Formas de Pagamento",
+        icon: CreditCard,
+      },
       { href: "/categories", label: "Categorias", icon: Tags },
     ],
   },
   {
     label: "Investimentos",
-    items: [
-      { href: "/reserva", label: "Reserva", icon: PiggyBank },
-    ],
+    items: [{ href: "/reserva", label: "Reserva", icon: PiggyBank }],
   },
-] as const;
+] as const
 
 interface ChannelsProps {
-  onNavigate?: () => void;
+  onNavigate?: () => void
 }
 
 export function ChannelsContent({ onNavigate }: ChannelsProps) {
-  const pathname = usePathname();
-  const { month, setMonth, min } = useMonth();
-  const { active } = useAccounts();
+  const pathname = usePathname()
+  const { month, setMonth, min } = useMonth()
+  const { year, minYear, maxYear, setYear } = useCalendarYearFilter()
+  const { active } = useAccounts()
+  const isCalendar = pathname === "/calendario"
 
   return (
     <div className="flex h-full flex-col gap-1">
       {/* Filtro global de mês; altura/borda alinham com o header fixo
-          e com o divider da rail (pt 8 + botão 36/40 + mt 4 + 1). */}
-      <div
-        className="hidden h-[calc(57px_+_var(--safe-area-inset-top))] shrink-0 items-center border-b px-2 md:flex"
-        style={{ paddingTop: "var(--safe-area-inset-top)" }}
-      >
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Mês anterior"
-          disabled={!month || month <= min}
-          onClick={() => setMonth(shiftMonth(month, -1))}
+          e com o divider da rail (pt 8 + botão 36/40 + mt 4 + 1).
+          No calendário o filtro de mês some e o de ano ocupa o mesmo lugar. */}
+      {isCalendar ? (
+        <div
+          className="hidden h-[calc(57px_+_var(--safe-area-inset-top))] shrink-0 items-center border-b px-2 md:flex"
+          style={{ paddingTop: "var(--safe-area-inset-top)" }}
         >
-          <ChevronLeft className="size-4" />
-        </Button>
-        <div className="flex min-w-0 flex-1 justify-center">
-          <MonthPicker value={month} onChange={setMonth} min={min} compact />
+          <div className="flex flex-1 flex-col justify-center">
+            <YearSelector
+              year={year}
+              minYear={minYear}
+              maxYear={maxYear}
+              onYearChange={setYear}
+            />
+          </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Próximo mês"
-          disabled={!month}
-          onClick={() => setMonth(shiftMonth(month, 1))}
+      ) : (
+        <div
+          className="hidden h-[calc(57px_+_var(--safe-area-inset-top))] shrink-0 items-center border-b px-2 md:flex"
+          style={{ paddingTop: "var(--safe-area-inset-top)" }}
         >
-          <ChevronRight className="size-4" />
-        </Button>
-      </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Mês anterior"
+            disabled={!month || month <= min}
+            onClick={() => setMonth(shiftMonth(month, -1))}
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+          <div className="flex min-w-0 flex-1 justify-center">
+            <MonthPicker value={month} onChange={setMonth} min={min} compact />
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Próximo mês"
+            disabled={!month}
+            onClick={() => setMonth(shiftMonth(month, 1))}
+          >
+            <ChevronRight className="size-4" />
+          </Button>
+        </div>
+      )}
       {/* Padding vertical alinhado ao layout entre o header e o conteúdo. */}
       <div className="flex min-h-0 flex-1 flex-col pt-[10px]">
         <nav className="flex flex-1 flex-col gap-2 overflow-y-auto px-2">
@@ -81,9 +113,16 @@ export function ChannelsContent({ onNavigate }: ChannelsProps) {
             active={pathname === "/"}
             onClick={onNavigate}
           />
+          <ChannelLink
+            href="/calendario"
+            label="Calendário"
+            icon={<CalendarDays className="size-4 shrink-0" />}
+            active={pathname.startsWith("/calendario")}
+            onClick={onNavigate}
+          />
           {MODULE_GROUPS.map((group) => (
             <div key={group.label} className="flex flex-col gap-0.5">
-              <p className="px-3 pt-2 pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="px-3 pt-2 pb-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                 {group.label}
               </p>
               {group.items.map(({ href, label, icon: Icon }) => (
@@ -104,13 +143,21 @@ export function ChannelsContent({ onNavigate }: ChannelsProps) {
         <p className="sr-only px-4 pb-2">Conta ativa: {active.name}</p>
       )}
     </div>
-  );
+  )
 }
 
 function ChannelLink({
-  href, label, icon, active, onClick,
+  href,
+  label,
+  icon,
+  active,
+  onClick,
 }: {
-  href: string; label: string; icon: React.ReactNode; active: boolean; onClick?: () => void;
+  href: string
+  label: string
+  icon: React.ReactNode
+  active: boolean
+  onClick?: () => void
 }) {
   return (
     <Link
@@ -118,12 +165,12 @@ function ChannelLink({
       onClick={onClick}
       data-slot="channel-link"
       className={cn(
-        "flex select-none items-center gap-2 rounded-md px-3 py-2 text-sm font-medium outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:bg-sidebar-accent focus-visible:text-sidebar-accent-foreground",
+        "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors outline-none select-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:bg-sidebar-accent focus-visible:text-sidebar-accent-foreground",
         active && "bg-sidebar-accent text-sidebar-accent-foreground"
       )}
     >
       {icon}
       <span className="truncate">{label}</span>
     </Link>
-  );
+  )
 }

@@ -10,8 +10,8 @@ import { foregroundOn, initials, type AccountInfo } from "./models";
 import { useAccounts } from "./services";
 import {
   AccountCreateDialog,
-  AccountDeleteDialog,
   AccountEditDialog,
+  AccountDeleteDialog,
 } from "./AccountDialogs";
 
 export function AccountRail() {

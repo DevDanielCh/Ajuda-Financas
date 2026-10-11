@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Providers } from "@/components/providers"
 import { Toaster } from "@/components/ui/toast"
 import { MonthProvider } from "@/lib/month-context"
+import { CalendarYearProvider } from "@/lib/calendar-context"
 import { AppShell } from "@/src/Accounts/AppShell"
 import { UpdateDialog } from "@/components/UpdateDialog"
 import { SyncOverlay } from "@/src/Sync/SyncOverlay"
@@ -38,20 +39,32 @@ export default function RootLayout({
     <html
       lang="pt-BR"
       suppressHydrationWarning
-      className={cn("antialiased", inter.variable, jetbrainsMono.variable, "font-sans")}
+      className={cn(
+        "antialiased",
+        inter.variable,
+        jetbrainsMono.variable,
+        "font-sans"
+      )}
     >
       <body>
         <SafeAreaInit />
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
           <Providers>
             <PlatformProvider>
               <MonthProvider>
-                <AppShell>
-                  <main className="w-full">{children}</main>
-                </AppShell>
-                <Toaster />
-                <SyncOverlay />
-                <UpdateDialog />
+                <CalendarYearProvider>
+                  <AppShell>
+                    <main className="w-full">{children}</main>
+                  </AppShell>
+                  <Toaster />
+                  <SyncOverlay />
+                  <UpdateDialog />
+                </CalendarYearProvider>
               </MonthProvider>
             </PlatformProvider>
           </Providers>

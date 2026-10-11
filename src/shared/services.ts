@@ -7,6 +7,8 @@ export const dashboardKeys = (month: string | null) => ["dashboard", month] as c
 export const chartKeys = (month: string | null) => ["chart-data", month] as const;
 export const settingsKeys = ["settings"] as const;
 export const earliestMonthKeys = ["earliest-month"] as const;
+export const calendarYearKeys = (year: number) => ["calendar-year", year] as const;
+export const calendarBoundsKeys = ["calendar-bounds"] as const;
 
 export function useDashboard(month: string | null) {
   return useQuery({
@@ -48,6 +50,21 @@ export function useSettings() {
     queryKey: settingsKeys,
     queryFn: () => sharedApi.getSettings(),
     staleTime: 15_000,
+  });
+}
+
+export function useCalendarYear(year: number) {
+  return useQuery({
+    queryKey: calendarYearKeys(year),
+    queryFn: () => sharedApi.getCalendarYear(year),
+  });
+}
+
+export function useCalendarBounds() {
+  return useQuery({
+    queryKey: calendarBoundsKeys,
+    queryFn: () => sharedApi.getCalendarBounds(),
+    staleTime: 60_000,
   });
 }
 

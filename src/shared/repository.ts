@@ -1,5 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ChartData, DashboardData, Settings, SettingsInput } from "./models";
+import type {
+  CalendarBounds,
+  CalendarYear,
+  ChartData,
+  DashboardData,
+  Settings,
+  SettingsInput,
+} from "./models";
 
 export const getEarliestMonth = () => invoke<string>("get_earliest_month");
 export const getVersion = () => invoke<string>("get_version");
@@ -9,6 +16,8 @@ export const getDashboard = (month: string) => invoke<DashboardData>("get_dashbo
 export const syncDashboard = (month: string) => invoke<DashboardData>("sync_dashboard", { month });
 export const revalidateGenerated = () => invoke<void>("revalidate_generated_transactions");
 export const getChartData = (month: string | null) => invoke<ChartData>("get_chart_data", { month });
+export const getCalendarYear = (year: number) => invoke<CalendarYear>("get_calendar_year", { year });
+export const getCalendarBounds = () => invoke<CalendarBounds>("get_calendar_bounds");
 
 export function msg(e: unknown): string {
   return typeof e === "string" ? e : e instanceof Error ? e.message : "Erro desconhecido";
@@ -23,4 +32,6 @@ export const sharedApi = {
   syncDashboard,
   revalidateGenerated,
   getChartData,
+  getCalendarYear,
+  getCalendarBounds,
 };

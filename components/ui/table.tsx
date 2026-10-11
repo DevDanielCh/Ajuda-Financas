@@ -4,17 +4,19 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Table({ className, scrollable, children, ...props }: React.ComponentProps<"table"> & { scrollable?: boolean }) {
+function Table({
+  className,
+  scrollable,
+  children,
+  ...props
+}: React.ComponentProps<"table"> & { scrollable?: boolean }) {
   if (scrollable) {
     return (
       <div
         data-slot="table-container"
         className={cn("overflow-hidden rounded-md border bg-card", className)}
       >
-        <div
-          data-slot="table-scroll"
-          className="overflow-y-auto"
-        >
+        <div data-slot="table-scroll" className="overflow-y-auto">
           <table
             data-slot="table"
             className="w-full caption-bottom border-separate border-spacing-x-0 border-spacing-y-0 text-sm"
@@ -24,23 +26,35 @@ function Table({ className, scrollable, children, ...props }: React.ComponentPro
           </table>
         </div>
       </div>
-    );
+    )
   }
   return (
     <div
       data-slot="table-container"
-      className={cn("relative w-full overflow-hidden rounded-md border bg-card", className)}
+      className={cn(
+        "relative w-full overflow-hidden rounded-md border bg-card",
+        className
+      )}
     >
       <table
         data-slot="table"
-        className={cn("w-full caption-bottom border-separate border-spacing-x-0 text-sm", className)}
+        className={cn(
+          "w-full caption-bottom border-separate border-spacing-x-0 text-sm",
+          className
+        )}
         {...props}
-      />
+      >
+        {children}
+      </table>
     </div>
   )
 }
 
-function TableHeader({ className, scrollable, ...props }: React.ComponentProps<"thead"> & { scrollable?: boolean }) {
+function TableHeader({
+  className,
+  scrollable,
+  ...props
+}: React.ComponentProps<"thead"> & { scrollable?: boolean }) {
   return (
     <thead
       data-slot="table-header"
@@ -82,7 +96,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "transition-colors [&>td]:border-b [&>td]:border-border hover:bg-muted/30 has-aria-expanded:bg-muted/30 data-[state=selected]:bg-muted",
+        "transition-colors hover:bg-muted/30 has-aria-expanded:bg-muted/30 data-[state=selected]:bg-muted [&>td]:border-b [&>td]:border-border",
         className
       )}
       {...props}
@@ -90,13 +104,18 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
   )
 }
 
-function TableHead({ className, scrollable, ...props }: React.ComponentProps<"th"> & { scrollable?: boolean }) {
+function TableHead({
+  className,
+  scrollable,
+  ...props
+}: React.ComponentProps<"th"> & { scrollable?: boolean }) {
   return (
     <th
       data-slot="table-head"
       className={cn(
-        "h-10 px-3 text-sm text-left align-middle font-semibold whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0",
-        scrollable && "sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm",
+        "h-10 px-3 text-left align-middle text-sm font-semibold whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0",
+        scrollable &&
+          "sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm",
         className
       )}
       {...props}

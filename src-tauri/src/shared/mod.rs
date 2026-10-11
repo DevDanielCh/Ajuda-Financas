@@ -1,3 +1,4 @@
+pub mod calendar;
 pub mod card_bills;
 pub mod report;
 pub mod settings;
