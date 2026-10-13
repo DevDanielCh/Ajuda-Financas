@@ -1,9 +1,10 @@
 "use client";
 import { Eye, Pencil, Trash2 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import type { CrudRowAction } from "./types";
 
 export function CardOptionsSheet<T extends { id: number }>({
-  open, onOpenChange, row, title, canEdit, onView, onEdit, onDelete,
+  open, onOpenChange, row, title, canEdit, onView, onEdit, onDelete, actions,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -13,6 +14,7 @@ export function CardOptionsSheet<T extends { id: number }>({
   onView?: (row: T) => void;
   onEdit?: (row: T) => void;
   onDelete?: (row: T) => void;
+  actions?: CrudRowAction<T>[];
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -48,6 +50,22 @@ export function CardOptionsSheet<T extends { id: number }>({
                   <Trash2 className="size-4" /> Excluir
                 </button>
               )}
+              {actions
+                ?.filter((a) => !a.visible || a.visible(row))
+                .map((a) => (
+                  <button
+                    key={a.label}
+                    type="button"
+                    onClick={() => { onOpenChange(false); a.onSelect(row); }}
+                    className={
+                      a.variant === "destructive"
+                        ? "flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-destructive hover:bg-accent"
+                        : "flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium hover:bg-accent"
+                    }
+                  >
+                    {a.icon} {a.label}
+                  </button>
+                ))}
             </div>
           </>
         )}

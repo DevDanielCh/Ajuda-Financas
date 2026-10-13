@@ -88,6 +88,16 @@ export interface ActiveFilter {
 
 // ── CrudPage config ──
 
+/** Ação extra exibida no menu de contexto (linha/card). */
+export interface CrudRowAction<T> {
+  label: string;
+  icon?: ReactNode;
+  onSelect: (row: T) => void;
+  variant?: "default" | "destructive";
+  /** Só aparece quando retornar true. */
+  visible?: (row: T) => boolean;
+}
+
 export interface CrudConfig<T extends { id: number }, F, E> {
   title: string;
   columns: Column<T>[];
@@ -118,6 +128,8 @@ export interface CrudConfig<T extends { id: number }, F, E> {
   onRowDoubleClick?: (row: T) => void;
   onView?: (row: T) => void;
   protected?: (row: T) => boolean;
+  /** Ações extras no menu de contexto (desktop: dropdown; mobile: sheet). */
+  rowActions?: CrudRowAction<T>[];
   /** Conteúdo exibido entre o título e a busca (ex.: card de saldo). */
   summary?: (rows: T[]) => ReactNode;
   mobileCorners?: MobileCorners<T>;

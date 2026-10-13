@@ -1,12 +1,13 @@
 "use client"
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, CreditCard } from "lucide-react"
+import { ArrowLeft, CreditCard, FastForward } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { CrudPage } from "@/components/crud/CrudPage"
 import { TransacaoAddForm } from "./TransacaoAddForm"
+import { AdvanceInstallmentsDialog } from "../ContaFixa/AdvanceInstallmentsDialog"
 import { transactionApi } from "../../Repositories/transaction"
 import { categoryApi } from "../../Repositories/category"
 import { paymentMethodApi } from "../../Repositories/payment-method"
@@ -29,6 +30,7 @@ export function FaturaDetail({ id }: { id: number | null }) {
   const [detail, setDetail] = useState<CardBillDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reload, setReload] = useState(0)
+  const [advanceId, setAdvanceId] = useState<number | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -133,24 +135,36 @@ export function FaturaDetail({ id }: { id: number | null }) {
                 {
                   label: "Valor",
                   name: "amount",
-                  render: (r) => (
-                    <span className="text-negative tabular-nums">
-                      − {formatMoney(r.amount)}
-                    </span>
-                  ),
+                  render: (r) =>
+                    r.type === 6 ? (
+                      <span className="text-positive tabular-nums">
+                        + {formatMoney(Math.abs(r.amount))}
+                      </span>
+                    ) : (
+                      <span className="text-negative tabular-nums">
+                        − {formatMoney(r.amount)}
+                      </span>
+                    ),
                 },
               ],
               mobileCorners: {
                 topLeft: (r) => r.description,
                 bottomLeft: (r) =>
-                  r.installment
-                    ? `Parcela ${r.installment}`
-                    : (r.category_name ?? "—"),
-                topRight: (r) => (
-                  <span className="text-negative tabular-nums">
-                    − {formatMoney(r.amount)}
-                  </span>
-                ),
+                  r.type === 6
+                    ? "Desconto"
+                    : r.installment
+                      ? `Parcela ${r.installment}`
+                      : (r.category_name ?? "—"),
+                topRight: (r) =>
+                  r.type === 6 ? (
+                    <span className="text-positive tabular-nums">
+                      + {formatMoney(Math.abs(r.amount))}
+                    </span>
+                  ) : (
+                    <span className="text-negative tabular-nums">
+                      − {formatMoney(r.amount)}
+                    </span>
+                  ),
                 bottomRight: (r) => formatDate(r.date),
               },
               keepOpen: false,
@@ -177,7 +191,19 @@ export function FaturaDetail({ id }: { id: number | null }) {
                 payment_method_id: r.payment_method_id,
                 card_mode: r.card_mode,
               }),
-              protected: () => false,
+              protected: (r) => r.type === 6 || r.advanced_from != null,
+              rowActions: [
+                {
+                  label: "Adiantar parcelas",
+                  icon: <FastForward />,
+                  visible: (r: TransactionRow) =>
+                    r.fixed_bill_id != null &&
+                    r.installment != null &&
+                    r.advanced_from == null,
+                  onSelect: (r: TransactionRow) =>
+                    setAdvanceId(r.fixed_bill_id),
+                },
+              ],
               tableClassName: "table-scroll-flex",
               loadResources: async () => {
                 const [categories, paymentMethods] = await Promise.all([
@@ -198,6 +224,15 @@ export function FaturaDetail({ id }: { id: number | null }) {
           />
         </div>
       )}
+
+      <AdvanceInstallmentsDialog
+        planId={advanceId}
+        onOpenChange={(o) => { if (!o) setAdvanceId(null); }}
+        onDone={() => {
+          setAdvanceId(null)
+          setReload((n) => n + 1)
+        }}
+      />
     </div>
   )
 }

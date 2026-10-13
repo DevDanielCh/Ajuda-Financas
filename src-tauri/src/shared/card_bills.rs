@@ -141,7 +141,7 @@ fn card_bill(
             .prepare(&format!(
             "SELECT COALESCE(SUM(t.amount), 0) FROM transactions t
              LEFT JOIN fixed_bills fb ON fb.id = t.fixed_bill_id AND fb.deleted_at IS NULL
-             WHERE t.type = 2 AND t.payment_method_id = ?1 AND t.bill_start IS NULL
+             WHERE t.type IN (2, 6) AND t.payment_method_id = ?1 AND t.bill_start IS NULL
                AND t.card_mode = 0
                AND t.date >= ?2 AND t.date < ?3
                AND t.deleted_at IS NULL

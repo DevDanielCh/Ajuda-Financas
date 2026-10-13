@@ -44,6 +44,7 @@ pub fn list_reserva_movements_impl(conn: &Connection, account_id: i64) -> Result
                 card_mode: r.get(12)?,
                 in_principal: r.get(13)?,
                 installment: None,
+                advanced_from: None,
             })
         })
         .map_err(db_err)?

@@ -1,4 +1,4 @@
-export type TransactionType = 1 | 2 | 3 | 4 | 5;
+export type TransactionType = 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface TransactionRow {
   id: number;
@@ -19,6 +19,8 @@ export interface TransactionRow {
   /** Movimento também gera despesa/receita na conta principal. */
   in_principal?: boolean;
   installment: string | null;
+  /** Mês original (YYYY-MM) quando a parcela foi adiantada; imutável. */
+  advanced_from: string | null;
 }
 
 export interface CardBillDetail {

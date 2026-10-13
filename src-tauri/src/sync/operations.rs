@@ -34,13 +34,13 @@ pub fn entity_columns(entity: &str) -> &'static str {
         "payment_methods" => "id, uuid, name, type, metadata, created_at, updated_at, deleted_at",
         "categories" => "id, uuid, name, type, color, icon, created_at, updated_at, deleted_at",
         "fixed_bills" => {
-            "id, uuid, description, amount, day, category_id, payment_method_id, start_month, end_month, installments, purchase_date, created_at, updated_at, deleted_at"
+            "id, uuid, description, amount, day, category_id, payment_method_id, start_month, end_month, installments, purchase_date, advanced_installments, advanced_to, created_at, updated_at, deleted_at"
         }
         "loans" => {
             "id, uuid, type, description, principal, installment, total_installments, day, start_month, payment_method_id, monthly_rate, created_at, updated_at, deleted_at"
         }
         "transactions" => {
-            "id, uuid, description, amount, type, date, category_id, payment_method_id, fixed_bill_id, loan_id, bill_start, bill_end, card_mode, in_principal, created_at, updated_at, deleted_at"
+            "id, uuid, description, amount, type, date, category_id, payment_method_id, fixed_bill_id, loan_id, bill_start, bill_end, card_mode, in_principal, advanced_from, created_at, updated_at, deleted_at"
         }
         "settings" => "key, uuid, value, created_at, updated_at, deleted_at",
         _ => "",
@@ -80,6 +80,7 @@ pub fn read_entity_row(
                     COALESCE(pm.uuid, '') as pm_uuid,
                     COALESCE(a.uuid, '') as account_uuid,
                     fb.start_month, fb.end_month, fb.installments, fb.purchase_date,
+                    fb.advanced_installments, fb.advanced_to,
                     fb.created_at, fb.updated_at, fb.deleted_at
              FROM fixed_bills fb
              LEFT JOIN categories c ON c.id = fb.category_id
@@ -105,7 +106,7 @@ pub fn read_entity_row(
                     COALESCE(fb.uuid, '') as fb_uuid,
                     COALESCE(l.uuid, '') as loan_uuid,
                     COALESCE(a.uuid, '') as account_uuid,
-                    t.bill_start, t.bill_end, t.card_mode, t.in_principal,
+                    t.bill_start, t.bill_end, t.card_mode, t.in_principal, t.advanced_from,
                     t.created_at, t.updated_at, t.deleted_at
              FROM transactions t
              LEFT JOIN categories c ON c.id = t.category_id
@@ -135,20 +136,7 @@ pub fn read_entity_row(
     let mut rows = stmt.query_map([row_id], |r| {
         let mut map = serde_json::Map::new();
         for (i, name) in columns.iter().enumerate() {
-            let val: Option<String> = r.get(i).ok();
-            map.insert(
-                name.clone(),
-                match val {
-                    Some(v) => {
-                        if v.is_empty() && name.ends_with("_uuid") {
-                            serde_json::Value::Null
-                        } else {
-                            serde_json::Value::String(v)
-                        }
-                    }
-                    None => serde_json::Value::Null,
-                },
-            );
+            map.insert(name.clone(), crate::sync::payload::column_to_json(r, i, name));
         }
         Ok(serde_json::Value::Object(map))
     })

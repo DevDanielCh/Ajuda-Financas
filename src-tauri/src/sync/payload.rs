@@ -3,6 +3,31 @@ use serde::{Deserialize, Serialize};
 
 use crate::shared::util::db_err;
 
+/// Converte uma coluna do SQLite em JSON preservando o tipo (null/inteiro/
+/// real/texto). Colunas `*_uuid` vazias viram null.
+pub(crate) fn column_to_json(
+    r: &rusqlite::Row<'_>,
+    i: usize,
+    name: &str,
+) -> serde_json::Value {
+    use rusqlite::types::ValueRef;
+    match r.get_ref(i) {
+        Ok(ValueRef::Integer(n)) => serde_json::Value::from(n),
+        Ok(ValueRef::Real(f)) => serde_json::Number::from_f64(f)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
+        Ok(ValueRef::Text(t)) => {
+            let s = String::from_utf8_lossy(t);
+            if s.is_empty() && name.ends_with("_uuid") {
+                serde_json::Value::Null
+            } else {
+                serde_json::Value::String(s.into_owned())
+            }
+        }
+        _ => serde_json::Value::Null,
+    }
+}
+
 
 
 /// Represents the full state of syncable data for snapshots.
@@ -62,6 +87,7 @@ fn read_all_syncable(conn: &Connection, entity: &str) -> Result<Vec<serde_json::
                     COALESCE(pm.uuid, '') as payment_method_uuid,
                     COALESCE(a.uuid, '') as account_uuid,
                     fb.start_month, fb.end_month, fb.installments, fb.purchase_date,
+                    fb.advanced_installments, fb.advanced_to,
                     fb.created_at, fb.updated_at, fb.deleted_at
              FROM fixed_bills fb
              LEFT JOIN categories c ON c.id = fb.category_id
@@ -89,7 +115,7 @@ fn read_all_syncable(conn: &Connection, entity: &str) -> Result<Vec<serde_json::
                     COALESCE(fb.uuid, '') as fixed_bill_uuid,
                     COALESCE(l.uuid, '') as loan_uuid,
                     COALESCE(a.uuid, '') as account_uuid,
-                    t.bill_start, t.bill_end, t.card_mode,
+                    t.bill_start, t.bill_end, t.card_mode, t.in_principal, t.advanced_from,
                     t.created_at, t.updated_at, t.deleted_at
              FROM transactions t
              LEFT JOIN categories c ON c.id = t.category_id
@@ -126,20 +152,7 @@ fn read_all_syncable(conn: &Connection, entity: &str) -> Result<Vec<serde_json::
         .query_map([], |r| {
             let mut map = serde_json::Map::new();
             for (i, name) in columns.iter().enumerate() {
-                let val: Option<String> = r.get(i).ok();
-                map.insert(
-                    name.clone(),
-                    match val {
-                        Some(v) => {
-                            if v.is_empty() && name.ends_with("_uuid") {
-                                serde_json::Value::Null
-                            } else {
-                                serde_json::Value::String(v)
-                            }
-                        }
-                        None => serde_json::Value::Null,
-                    },
-                );
+                map.insert(name.clone(), column_to_json(r, i, name));
             }
             Ok(serde_json::Value::Object(map))
         })

@@ -1,8 +1,8 @@
 use chrono::{Datelike, Months, NaiveDate};
-use crate::organizacao_financeira::models::{AmortizationRow, CategoryInput, FixedBillInput, PaymentMethodInput, TransactionInput};
+use crate::organizacao_financeira::models::{AdvancePreview, AmortizationRow, CategoryInput, FixedBillInput, PaymentMethodInput, TransactionInput};
 use crate::shared::card_bills::{self, last_day_of, refresh_card_bills};
 use crate::shared::settings;
-use crate::shared::util::{db_err, month_diff, parse_month};
+use crate::shared::util::{add_months, current_month, db_err, month_diff, parse_month};
 use rusqlite::{params, Connection, OptionalExtension};
 
 pub fn create_category(conn: &Connection, account_id: i64, input: &CategoryInput) -> Result<(), String> {
@@ -196,9 +196,25 @@ pub fn create(conn: &Connection, account_id: i64, input: &TransactionInput) -> R
     Ok(())
 }
 
+/// Transação gerada por adiantamento/desconto é imutável (não edita nem exclui).
+pub(crate) fn is_immutable(conn: &Connection, id: i64) -> Result<bool, String> {
+    let row: Option<(i64, Option<String>)> = conn
+        .query_row(
+            "SELECT type, advanced_from FROM transactions WHERE id = ?1",
+            params![id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()
+        .map_err(db_err)?;
+    Ok(matches!(row, Some((6, _)) | Some((_, Some(_)))))
+}
+
 pub fn update(conn: &Connection, id: i64, input: &TransactionInput) -> Result<(), String> {
     if card_bills::is_card_bill(conn, id)? {
         return Err("fatura é gerada automaticamente e não pode ser editada".into());
+    }
+    if is_immutable(conn, id)? {
+        return Err("parcela adiantada ou desconto não pode ser alterado".into());
     }
     let affected = conn
         .execute(
@@ -232,6 +248,9 @@ pub fn delete_ids(conn: &Connection, ids: &[i64]) -> Result<(), String> {
     for id in ids {
         if card_bills::is_card_bill(conn, *id)? {
             return Err("fatura é gerada automaticamente e não pode ser excluída".into());
+        }
+        if is_immutable(conn, *id)? {
+            return Err("parcela adiantada ou desconto não pode ser excluído".into());
         }
     }
     let placeholders = vec!["?"; ids.len()].join(",");
@@ -267,11 +286,16 @@ pub(crate) fn purchase_installment(purchase: &str) -> Result<(String, i64), Stri
 }
 
 /// Gera transações das contas fixas ativas no mês. Dia clampado ao último dia.
+///
+/// Planos parcelados são materializados por completo (todas as parcelas do
+/// plano), não apenas o mês corrente — parcelas adiantadas vão para o mês
+/// destino (`advanced_to`) com `advanced_from` preenchido.
 pub fn generate_fixed_bills(conn: &Connection, account_id: i64, month: NaiveDate) -> Result<(), String> {
     let month_key = month.format("%Y-%m").to_string();
     let mut stmt = conn
         .prepare(
-            "SELECT id, description, amount, day, category_id, payment_method_id, installments, start_month
+            "SELECT id, description, amount, day, category_id, payment_method_id, installments, start_month,
+                    advanced_installments, advanced_to
              FROM fixed_bills
              WHERE start_month <= ?1 AND (end_month IS NULL OR end_month >= ?1) AND account_id = ?2",
         )
@@ -287,6 +311,8 @@ pub fn generate_fixed_bills(conn: &Connection, account_id: i64, month: NaiveDate
                 r.get::<_, i64>(5)?,
                 r.get::<_, Option<i64>>(6)?,
                 r.get::<_, String>(7)?,
+                r.get::<_, i64>(8)?,
+                r.get::<_, Option<String>>(9)?,
             ))
         })
         .map_err(db_err)?
@@ -310,12 +336,26 @@ pub fn generate_fixed_bills(conn: &Connection, account_id: i64, month: NaiveDate
         payment_method_id,
         installments,
         start_month,
+        advanced_installments,
+        advanced_to,
     ) in bills
     {
         if let Some(n) = installments {
-            if month_diff(&start_month, &month_key) >= n {
-                continue;
-            }
+            materialize_installment_plan(
+                conn,
+                account_id,
+                id,
+                &description,
+                amount,
+                day,
+                category_id,
+                payment_method_id,
+                n,
+                &start_month,
+                advanced_installments,
+                advanced_to.as_deref(),
+            )?;
+            continue;
         }
         let exists: i64 = conn
             .query_row(
@@ -341,6 +381,220 @@ pub fn generate_fixed_bills(conn: &Connection, account_id: i64, month: NaiveDate
     }
     Ok(())
 }
+
+/// Materializa todas as parcelas de um plano parcelado (idempotente).
+///
+/// Dedupe por mês efetivo: `COALESCE(advanced_from, substr(date,1,7))` deve ser
+/// igual ao mês original da parcela. Assim, parcelas adiantadas (que moram em
+/// `advanced_to`) não são recriadas no mês original.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn materialize_installment_plan(
+    conn: &Connection,
+    account_id: i64,
+    plan_id: i64,
+    description: &str,
+    amount: i64,
+    day: i64,
+    category_id: Option<i64>,
+    payment_method_id: i64,
+    installments: i64,
+    start_month: &str,
+    advanced_installments: i64,
+    advanced_to: Option<&str>,
+) -> Result<(), String> {
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM transactions WHERE fixed_bill_id = ?1 AND deleted_at IS NULL",
+            params![plan_id],
+            |r| r.get(0),
+        )
+        .map_err(db_err)?;
+    if count >= installments {
+        return Ok(());
+    }
+
+    let first_advanced = installments - advanced_installments + 1;
+    for k in 1..=installments {
+        let orig = add_months(start_month, (k - 1) as u32);
+        let exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM transactions
+                 WHERE fixed_bill_id = ?1 AND deleted_at IS NULL
+                   AND COALESCE(advanced_from, substr(date, 1, 7)) = ?2",
+                params![plan_id, orig],
+                |r| r.get(0),
+            )
+            .map_err(db_err)?;
+        if exists > 0 {
+            continue;
+        }
+        let is_advanced = advanced_installments > 0 && k >= first_advanced && advanced_to.is_some();
+        let target_month = if is_advanced {
+            advanced_to.unwrap().to_string()
+        } else {
+            orig.clone()
+        };
+        let tm = parse_month(&target_month)?;
+        let last = last_day_of(tm) as i64;
+        let due = tm
+            .with_day(day.min(last) as u32)
+            .unwrap()
+            .format("%Y-%m-%d")
+            .to_string();
+        let desc = if is_advanced {
+            format!("{description} - Adiantamento")
+        } else {
+            description.to_string()
+        };
+        let advanced_from = if is_advanced { Some(orig) } else { None };
+        conn.execute(
+            "INSERT INTO transactions (account_id, description, amount, type, date, category_id, payment_method_id, fixed_bill_id, loan_id, advanced_from)
+             VALUES (?1, ?2, ?3, 2, ?4, ?5, ?6, ?7, NULL, ?8)",
+            params![account_id, desc, amount, due, category_id, payment_method_id, plan_id, advanced_from],
+        )
+        .map_err(db_err)?;
+    }
+    Ok(())
+}
+
+/// Dados do modal de adiantamento para um plano parcelado.
+pub fn advance_preview(conn: &Connection, account_id: i64, plan_id: i64) -> Result<AdvancePreview, String> {
+    let plan: Option<(String, i64, Option<i64>, String, i64)> = conn
+        .query_row(
+            "SELECT description, amount, installments, start_month, advanced_installments
+             FROM fixed_bills WHERE id = ?1 AND account_id = ?2 AND deleted_at IS NULL",
+            params![plan_id, account_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+        )
+        .optional()
+        .map_err(db_err)?;
+    let (description, amount, installments, start_month, advanced_installments) =
+        plan.ok_or("Plano não encontrado")?;
+    let installments = installments.ok_or("Conta fixa não é parcelada")?;
+
+    let cur = current_month();
+    let current_index = if cur >= start_month {
+        installment_index(&start_month, &cur).min(installments)
+    } else {
+        0
+    };
+    Ok(AdvancePreview {
+        fixed_bill_id: plan_id,
+        description,
+        installment_amount: amount,
+        remaining: installments - current_index,
+        current_index,
+        already_advanced: advanced_installments > 0,
+    })
+}
+
+/// Adianta as últimas `installments_to_advance` parcelas do plano para o mês
+/// atual, aplicando um `discount` (>= 0) como linha separada (type 6).
+pub fn advance_installments(
+    conn: &Connection,
+    account_id: i64,
+    plan_id: i64,
+    installments_to_advance: i64,
+    discount: i64,
+) -> Result<(), String> {
+    if installments_to_advance < 1 {
+        return Err("Informe ao menos 1 parcela".into());
+    }
+    if discount < 0 {
+        return Err("Desconto inválido".into());
+    }
+    let plan: Option<(String, i64, i64, String, Option<i64>, i64, i64)> = conn
+        .query_row(
+            "SELECT description, amount, day, start_month, category_id, payment_method_id, installments
+             FROM fixed_bills WHERE id = ?1 AND account_id = ?2 AND deleted_at IS NULL",
+            params![plan_id, account_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?)),
+        )
+        .optional()
+        .map_err(db_err)?;
+    let (description, amount, day, start_month, category_id, payment_method_id, installments) =
+        plan.ok_or("Plano não encontrado")?;
+
+    let advanced_now: i64 = conn
+        .query_row(
+            "SELECT advanced_installments FROM fixed_bills WHERE id = ?1",
+            params![plan_id],
+            |r| r.get(0),
+        )
+        .map_err(db_err)?;
+    if advanced_now > 0 {
+        return Err("Este parcelamento já foi adiantado".into());
+    }
+
+    let cur = current_month();
+    let current_index = if cur >= start_month {
+        installment_index(&start_month, &cur).min(installments)
+    } else {
+        0
+    };
+    let remaining = installments - current_index;
+    if installments_to_advance > remaining {
+        return Err(format!("Só é possível adiantar até {remaining} parcela(s)"));
+    }
+    let total = installments_to_advance * amount;
+    if discount > total {
+        return Err("Desconto maior que o total a adiantar".into());
+    }
+
+    conn.execute(
+        "UPDATE fixed_bills SET advanced_installments = ?1, advanced_to = ?2
+         WHERE id = ?3 AND account_id = ?4",
+        params![installments_to_advance, cur, plan_id, account_id],
+    )
+    .map_err(db_err)?;
+
+    conn.execute(
+        "DELETE FROM transactions WHERE fixed_bill_id = ?1",
+        params![plan_id],
+    )
+    .map_err(db_err)?;
+
+    materialize_installment_plan(
+        conn,
+        account_id,
+        plan_id,
+        &description,
+        amount,
+        day,
+        category_id,
+        payment_method_id,
+        installments,
+        &start_month,
+        installments_to_advance,
+        Some(&cur),
+    )?;
+
+    if discount > 0 {
+        let tm = parse_month(&cur)?;
+        let last = last_day_of(tm) as i64;
+        let due = tm
+            .with_day(day.min(last) as u32)
+            .unwrap()
+            .format("%Y-%m-%d")
+            .to_string();
+        conn.execute(
+            "INSERT INTO transactions (account_id, description, amount, type, date, category_id, payment_method_id, fixed_bill_id, loan_id)
+             VALUES (?1, ?2, ?3, 6, ?4, ?5, ?6, NULL, NULL)",
+            params![
+                account_id,
+                format!("Desconto Adiantamento Parcelas - {description}"),
+                -discount,
+                due,
+                category_id,
+                payment_method_id
+            ],
+        )
+        .map_err(db_err)?;
+    }
+
+    refresh_card_bills(conn, account_id)
+}
+
 
 pub fn reconcile_fixed_bills(conn: &Connection, account_id: i64, start_month: &str, now: NaiveDate) -> Result<(), String> {
     let min = settings::earliest_month(conn, account_id)?.min(start_month.to_string());
@@ -735,6 +989,121 @@ mod tests {
         assert_eq!(input.day, 1, "sem compra nem cartão, dia inalterado");
     }
 
+    fn insert_plan(conn: &Connection, pm: i64, start: &str, end: &str, amount: i64) -> i64 {
+        conn.execute(
+            "INSERT INTO fixed_bills (description, amount, day, payment_method_id, start_month, end_month, installments)
+             VALUES ('parcelado', ?4, 10, ?1, ?2, ?3, 3)",
+            params![pm, start, end, amount],
+        )
+        .unwrap();
+        conn.last_insert_rowid()
+    }
+
+    #[test]
+    fn advance_moves_last_installments_and_applies_discount() {
+        let conn = test_db();
+        let pm = add_pm(&conn, "PIX", 1, None);
+        let cur = current_month();
+        let plan_id = insert_plan(&conn, pm, &cur, &add_months(&cur, 2), 10000);
+
+        let preview = advance_preview(&conn, 1, plan_id).unwrap();
+        assert_eq!(preview.remaining, 2, "1 parcela é a do mês atual; restam 2");
+        assert!(!preview.already_advanced);
+
+        advance_installments(&conn, 1, plan_id, 2, 1500).unwrap();
+
+        let (adv, adv_to): (i64, Option<String>) = conn
+            .query_row(
+                "SELECT advanced_installments, advanced_to FROM fixed_bills WHERE id = ?1",
+                params![plan_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(adv, 2);
+        assert_eq!(adv_to.as_deref(), Some(cur.as_str()));
+
+        let mut stmt = conn
+            .prepare("SELECT advanced_from, date, description FROM transactions WHERE fixed_bill_id = ?1 ORDER BY id")
+            .unwrap();
+        let rows: Vec<(Option<String>, String, String)> = stmt
+            .query_map(params![plan_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(rows.len(), 3, "plano continua com 3 parcelas");
+        assert_eq!(rows[0].0, None, "1ª parcela não adiantada");
+        assert_eq!(rows[1].0.as_deref(), Some(add_months(&cur, 1).as_str()));
+        assert_eq!(rows[2].0.as_deref(), Some(add_months(&cur, 2).as_str()));
+        assert!(rows[1].2.ends_with(" - Adiantamento"));
+        assert_eq!(rows[1].1, format!("{cur}-10"), "parcela adiantada no mês atual");
+
+        let (dtype, damount, dfb): (i64, i64, Option<i64>) = conn
+            .query_row(
+                "SELECT type, amount, fixed_bill_id FROM transactions WHERE type = 6",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(dtype, 6);
+        assert_eq!(damount, -1500);
+        assert_eq!(dfb, None);
+
+        generate_fixed_bills(&conn, 1, parse_month(&cur).unwrap()).unwrap();
+        let total: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM transactions WHERE fixed_bill_id = ?1",
+                params![plan_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(total, 3, "materializar de novo não duplica");
+    }
+
+    #[test]
+    fn advance_guards() {
+        let conn = test_db();
+        let pm = add_pm(&conn, "PIX", 1, None);
+        let cur = current_month();
+        let plan_id = insert_plan(&conn, pm, &cur, &add_months(&cur, 2), 10000);
+
+        assert!(
+            advance_installments(&conn, 1, plan_id, 3, 0).is_err(),
+            "não pode adiantar a parcela do mês atual"
+        );
+        assert!(
+            advance_installments(&conn, 1, plan_id, 2, 99999).is_err(),
+            "desconto > total"
+        );
+        advance_installments(&conn, 1, plan_id, 1, 0).unwrap();
+        assert!(
+            advance_installments(&conn, 1, plan_id, 1, 0).is_err(),
+            "não re-adianta"
+        );
+    }
+
+    #[test]
+    fn advanced_rows_are_immutable() {
+        let conn = test_db();
+        let pm = add_pm(&conn, "PIX", 1, None);
+        let cur = current_month();
+        let plan_id = insert_plan(&conn, pm, &cur, &add_months(&cur, 2), 10000);
+        advance_installments(&conn, 1, plan_id, 2, 500).unwrap();
+
+        let adv_id: i64 = conn
+            .query_row(
+                "SELECT id FROM transactions WHERE fixed_bill_id = ?1 AND advanced_from IS NOT NULL LIMIT 1",
+                params![plan_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let disc_id: i64 = conn
+            .query_row("SELECT id FROM transactions WHERE type = 6", [], |r| r.get(0))
+            .unwrap();
+        assert!(is_immutable(&conn, adv_id).unwrap());
+        assert!(is_immutable(&conn, disc_id).unwrap());
+        assert!(!is_immutable(&conn, 9999).unwrap(), "id inexistente → false");
+    }
+
     #[test]
     fn generate_stops_at_installments_count() {
         let conn = test_db();
@@ -752,7 +1121,7 @@ mod tests {
         let rows: i64 = conn
             .query_row("SELECT COUNT(*) FROM transactions", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(rows, 1, "março (3/3) gera; abril (4/3) para");
+        assert_eq!(rows, 3, "plano materializa exatamente suas 3 parcelas, sem 4ª");
     }
 
     #[test]

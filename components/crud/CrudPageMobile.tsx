@@ -209,6 +209,7 @@ export function CrudPageMobile<T extends { id: number }, F, E>({
               message: ids.length === 1 ? "Excluir este registro?" : `Excluir ${ids.length} registros?`,
             });
           }}
+          actions={config.rowActions}
         />
 
         <Button

@@ -73,7 +73,7 @@ pub fn pm_expenses(
     let v: i64 = conn
         .query_row(
             "SELECT COALESCE(SUM(amount), 0) FROM transactions
-             WHERE type IN (2, 4) AND in_principal = 1 AND payment_method_id = ?1 AND date >= ?2 AND date < ?3
+             WHERE type IN (2, 4, 6) AND in_principal = 1 AND payment_method_id = ?1 AND date >= ?2 AND date < ?3
                AND deleted_at IS NULL",
             rusqlite::params![
                 pm_id,
@@ -90,7 +90,7 @@ pub fn no_pm_expenses(conn: &Connection, account_id: i64, start: NaiveDate, end:
     let v: i64 = conn
         .query_row(
             "SELECT COALESCE(SUM(amount), 0) FROM transactions
-             WHERE type IN (2, 4) AND in_principal = 1 AND payment_method_id IS NULL AND date >= ?1 AND date < ?2
+             WHERE type IN (2, 4, 6) AND in_principal = 1 AND payment_method_id IS NULL AND date >= ?1 AND date < ?2
                AND deleted_at IS NULL AND account_id = ?3",
             rusqlite::params![start.format("%Y-%m-%d").to_string(), end.format("%Y-%m-%d").to_string(), account_id],
             |r| r.get(0),
@@ -183,7 +183,7 @@ pub fn income_by_category(
     Ok(rows)
 }
 
-/// Despesas por categoria no período (type = 2; faturas type = 3 ficam de fora).
+/// Despesas por categoria no período (type = 2 e 6; faturas type = 3 ficam de fora).
 pub fn expenses_by_category(
     conn: &Connection,
     account_id: i64,
@@ -194,7 +194,7 @@ pub fn expenses_by_category(
         .prepare(
             "SELECT COALESCE(c.name, 'Sem categoria') AS name, SUM(t.amount) AS total, c.color
              FROM transactions t LEFT JOIN categories c ON c.id = t.category_id AND c.deleted_at IS NULL
-             WHERE t.type IN (2, 4) AND t.in_principal = 1 AND t.date >= ?1 AND t.date < ?2 AND t.deleted_at IS NULL AND t.account_id = ?3
+             WHERE t.type IN (2, 4, 6) AND t.in_principal = 1 AND t.date >= ?1 AND t.date < ?2 AND t.deleted_at IS NULL AND t.account_id = ?3
              GROUP BY c.name ORDER BY total DESC",
         )
         .map_err(db_err)?;

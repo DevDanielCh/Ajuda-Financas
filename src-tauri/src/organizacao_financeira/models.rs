@@ -238,6 +238,24 @@ pub struct TransactionRow {
     pub in_principal: bool,
     /// "n/total" quando a compra é parcela de conta fixa, senão None.
     pub installment: Option<String>,
+    /// Mês original (YYYY-MM) quando a parcela foi adiantada; None caso contrário.
+    /// Parcela adiantada é imutável.
+    pub advanced_from: Option<String>,
+}
+
+/// Dados necessários para montar o modal de adiantamento de parcelas.
+#[derive(Debug, Clone, Serialize)]
+pub struct AdvancePreview {
+    pub fixed_bill_id: i64,
+    pub description: String,
+    /// Valor de cada parcela.
+    pub installment_amount: i64,
+    /// Quantas parcelas ainda podem ser adiantadas (1..=remaining).
+    pub remaining: i64,
+    /// Índice da parcela do mês atual (1-based); 0 se o plano ainda não começou.
+    pub current_index: i64,
+    /// Verdadeiro quando o plano já tem adiantamento (não pode re-adiantar).
+    pub already_advanced: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -271,6 +289,10 @@ pub struct FixedBill {
     pub purchase_date: Option<String>,
     /// Verdadeiro quando todas as parcelas já venceram (parcelamento encerrado).
     pub finished: bool,
+    /// Quantas das últimas parcelas foram adiantadas (0 = nenhuma).
+    pub advanced_installments: i64,
+    /// Mês destino do adiantamento (YYYY-MM), None se não houve.
+    pub advanced_to: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

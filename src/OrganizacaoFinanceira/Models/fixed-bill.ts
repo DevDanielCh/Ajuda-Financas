@@ -14,6 +14,10 @@ export interface FixedBill {
   installments: number | null;
   purchase_date: string | null;
   finished: boolean;
+  /** Quantas das últimas parcelas foram adiantadas (0 = nenhuma). */
+  advanced_installments: number;
+  /** Mês destino do adiantamento (YYYY-MM), null se não houve. */
+  advanced_to: string | null;
 }
 
 export interface FixedBillInput {

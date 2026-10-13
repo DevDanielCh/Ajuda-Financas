@@ -52,6 +52,7 @@ pub fn migrations() -> Migrations<'static> {
         M::up(include_str!("../migrations/009_sync.sql")),
         M::up(include_str!("../migrations/010_accounts.sql")),
         M::up(include_str!("../migrations/011_in_principal.sql")),
+        M::up(include_str!("../migrations/012_advance_installments.sql")),
     ])
 }
 

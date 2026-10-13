@@ -138,6 +138,8 @@ pub fn run() {
             organizacao_financeira::controller::create_fixed_bill,
             organizacao_financeira::controller::update_fixed_bill,
             organizacao_financeira::controller::delete_fixed_bills,
+            organizacao_financeira::controller::advance_preview,
+            organizacao_financeira::controller::advance_installments,
             organizacao_financeira::controller::list_loans,
             organizacao_financeira::controller::get_loan_detail,
             organizacao_financeira::controller::create_loan,

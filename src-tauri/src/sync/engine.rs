@@ -687,6 +687,11 @@ fn apply_upsert(
             let end_month = get_str("end_month");
             let installments: Option<i64> = payload.get("installments").and_then(|v| v.as_i64());
             let purchase_date = get_str("purchase_date");
+            let advanced_installments: i64 = payload
+                .get("advanced_installments")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            let advanced_to = get_str("advanced_to");
             let created_at = get_str("created_at");
             let updated_at = get_str("updated_at").unwrap_or_else(|| op_ts.to_string());
             let deleted_at = get_str("deleted_at");
@@ -711,11 +716,13 @@ fn apply_upsert(
                     "UPDATE fixed_bills SET description = ?1, amount = ?2, day = ?3,
                      category_id = ?4, payment_method_id = ?5, start_month = ?6,
                      end_month = ?7, installments = ?8, purchase_date = ?9,
-                     updated_at = ?10, deleted_at = ?11
-                     WHERE id = ?12",
+                     advanced_installments = ?10, advanced_to = ?11,
+                     updated_at = ?12, deleted_at = ?13
+                     WHERE id = ?14",
                     rusqlite::params![
                         description, amount, day, category_id, pm_id, start_month,
-                        end_month, installments, purchase_date, updated_at, deleted_at, id
+                        end_month, installments, purchase_date, advanced_installments, advanced_to,
+                        updated_at, deleted_at, id
                     ],
                 )
                 .map_err(|e| e.to_string())?;
@@ -725,11 +732,13 @@ fn apply_upsert(
                 conn.execute(
                     "INSERT INTO fixed_bills (uuid, account_id, description, amount, day, category_id,
                      payment_method_id, start_month, end_month, installments, purchase_date,
+                     advanced_installments, advanced_to,
                      created_at, updated_at, deleted_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
                     rusqlite::params![
                         uuid, account_id, description, amount, day, category_id, pm_id, start_month,
-                        end_month, installments, purchase_date, created_at, updated_at, deleted_at
+                        end_month, installments, purchase_date, advanced_installments, advanced_to,
+                        created_at, updated_at, deleted_at
                     ],
                 )
                 .map_err(|e| e.to_string())?;
@@ -801,6 +810,7 @@ fn apply_upsert(
             let loan_uuid = get_str("loan_uuid");
             let bill_start = get_str("bill_start");
             let bill_end = get_str("bill_end");
+            let advanced_from = get_str("advanced_from");
             let card_mode: i64 = payload.get("card_mode").and_then(|v| v.as_i64()).unwrap_or(0);
             let in_principal: bool = payload
                 .get("in_principal")
@@ -837,11 +847,13 @@ fn apply_upsert(
                     "UPDATE transactions SET description = ?1, amount = ?2, type = ?3, date = ?4,
                      category_id = ?5, payment_method_id = ?6, fixed_bill_id = ?7, loan_id = ?8,
                      bill_start = ?9, bill_end = ?10, card_mode = ?11, in_principal = ?12,
-                     updated_at = ?13, deleted_at = ?14
-                     WHERE id = ?15",
+                     advanced_from = ?13,
+                     updated_at = ?14, deleted_at = ?15
+                     WHERE id = ?16",
                     rusqlite::params![
                         description, amount, type_, date, category_id, pm_id, fb_id,
-                        loan_id, bill_start, bill_end, card_mode, in_principal, updated_at, deleted_at, id
+                        loan_id, bill_start, bill_end, card_mode, in_principal, advanced_from,
+                        updated_at, deleted_at, id
                     ],
                 )
                 .map_err(|e| e.to_string())?;
@@ -850,11 +862,11 @@ fn apply_upsert(
                 conn.execute(
                     "INSERT INTO transactions (uuid, account_id, description, amount, type, date,
                      category_id, payment_method_id, fixed_bill_id, loan_id,
-                     bill_start, bill_end, card_mode, in_principal, created_at, updated_at, deleted_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+                     bill_start, bill_end, card_mode, in_principal, advanced_from, created_at, updated_at, deleted_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
                     rusqlite::params![
                         uuid, account_id, description, amount, type_, date, category_id, pm_id, fb_id,
-                        loan_id, bill_start, bill_end, card_mode, in_principal, created_at, updated_at, deleted_at
+                        loan_id, bill_start, bill_end, card_mode, in_principal, advanced_from, created_at, updated_at, deleted_at
                     ],
                 )
                 .map_err(|e| e.to_string())?;

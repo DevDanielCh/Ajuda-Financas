@@ -1,20 +1,25 @@
 "use client";
+import { useState } from "react";
+import { FastForward } from "lucide-react";
 import { InstallmentsScreen } from "@/components/screens/installments";
 import { CategoryChip } from "@/components/crud/CategoryChip";
 import { Badge } from "@/components/ui/badge";
 import { ContaFixaAddForm } from "@/src/OrganizacaoFinanceira/Views/ContaFixa/ContaFixaAddForm";
+import { AdvanceInstallmentsDialog } from "@/src/OrganizacaoFinanceira/Views/ContaFixa/AdvanceInstallmentsDialog";
 import { fixedBillApi } from "@/src/OrganizacaoFinanceira/Repositories/fixed-bill";
 import { categoryApi } from "@/src/OrganizacaoFinanceira/Repositories/category";
 import { paymentMethodApi } from "@/src/OrganizacaoFinanceira/Repositories/payment-method";
 import { fixedBillKeys } from "@/src/OrganizacaoFinanceira/Services/fixed-bill";
 import { fixedBillSchema } from "@/lib/schemas";
 import { currentMonthISO, formatMonth, formatMoney } from "@/lib/format";
-import type { FixedBillInput } from "@/src/OrganizacaoFinanceira/Models/fixed-bill";
+import type { FixedBill, FixedBillInput } from "@/src/OrganizacaoFinanceira/Models/fixed-bill";
 import type { Sort } from "@/src/shared/models";
 
 export default function InstallmentsPage() {
+  const [advanceId, setAdvanceId] = useState<number | null>(null);
   return (
-    <InstallmentsScreen
+    <>
+      <InstallmentsScreen
       config={{
         title: "Parcelamentos",
         columns: [
@@ -62,6 +67,18 @@ export default function InstallmentsPage() {
         update: (id, d) => fixedBillApi.update(id, d),
         remove: fixedBillApi.remove,
         rowClass: (r) => (r.finished ? "opacity-30" : ""),
+        protected: (r) => r.advanced_installments > 0,
+        rowActions: [
+          {
+            label: "Adiantar parcelas",
+            icon: <FastForward />,
+            visible: (r: FixedBill) =>
+              r.installments != null &&
+              !r.finished &&
+              r.advanced_installments === 0,
+            onSelect: (r: FixedBill) => setAdvanceId(r.id),
+          },
+        ],
         empty: (): FixedBillInput => ({
           description: "", amount: 0, day: 1, category_id: null,
           payment_method_id: 0, start_month: currentMonthISO(),
@@ -109,6 +126,12 @@ export default function InstallmentsPage() {
           },
         ],
       }}
-    />
+      />
+      <AdvanceInstallmentsDialog
+        planId={advanceId}
+        onOpenChange={(o) => { if (!o) setAdvanceId(null); }}
+        onDone={() => setAdvanceId(null)}
+      />
+    </>
   );
 }

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Sort } from "@/src/shared/models";
+import type { AdvancePreview } from "../Models/advance";
 import type { FixedBill, FixedBillInput } from "../Models/fixed-bill";
 
 export const fixedBillApi = {
@@ -13,4 +14,7 @@ export const fixedBillApi = {
   update: (id: number, input: FixedBillInput) =>
     invoke<void>("update_fixed_bill", { id, input }),
   remove: (ids: number[]) => invoke<void>("delete_fixed_bills", { ids }),
+  advancePreview: (id: number) => invoke<AdvancePreview>("advance_preview", { id }),
+  advance: (id: number, installmentsToAdvance: number, discount: number) =>
+    invoke<void>("advance_installments", { id, installmentsToAdvance, discount }),
 };

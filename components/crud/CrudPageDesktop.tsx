@@ -186,6 +186,7 @@ export function CrudPageDesktop<T extends { id: number }, F, E>({
         onDelete={(row) =>
           setConfirm({ ids: [row.id], message: "Excluir este registro?" })
         }
+        actions={config.rowActions}
       />
     </div>
   );

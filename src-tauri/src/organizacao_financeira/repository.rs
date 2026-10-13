@@ -27,7 +27,7 @@ pub(crate) fn list_transactions(
         "SELECT t.id, t.description, t.amount, t.type, t.date,
                 t.category_id, c.name, t.payment_method_id, pm.name,
                 t.fixed_bill_id, t.loan_id, (t.bill_start IS NOT NULL), t.card_mode, t.in_principal,
-                c.icon, c.color
+                c.icon, c.color, t.advanced_from
          FROM transactions t
          LEFT JOIN categories c ON c.id = t.category_id AND c.deleted_at IS NULL
          LEFT JOIN payment_methods pm ON pm.id = t.payment_method_id AND pm.deleted_at IS NULL
@@ -78,6 +78,7 @@ pub(crate) fn list_transactions(
                     card_mode: r.get(12)?,
                     in_principal: r.get(13)?,
                     installment: None,
+                    advanced_from: r.get(16)?,
                 })
             },
         )
@@ -109,7 +110,7 @@ pub fn card_bill_purchases(
                     t.category_id, cat.name, t.payment_method_id, pm.name,
                     t.fixed_bill_id, t.loan_id, 0, t.card_mode, t.in_principal,
                     fb.installments, fb.start_month,
-                    cat.icon, cat.color
+                    cat.icon, cat.color, t.advanced_from
              FROM transactions t
              LEFT JOIN categories cat ON cat.id = t.category_id AND cat.deleted_at IS NULL
              LEFT JOIN payment_methods pm ON pm.id = t.payment_method_id AND pm.deleted_at IS NULL
@@ -128,9 +129,11 @@ pub fn card_bill_purchases(
             let date: String = r.get(4)?;
             let installments: Option<i64> = r.get(14)?;
             let start_month: Option<String> = r.get(15)?;
+            let advanced_from: Option<String> = r.get(18)?;
             let installment = match (installments, start_month) {
                 (Some(total), Some(sm)) if total >= 1 => {
-                    Some(format!("{}/{}", crate::organizacao_financeira::service::installment_index(&sm, &date[..7]), total))
+                    let idx_month = advanced_from.as_deref().unwrap_or(&date[..7]);
+                    Some(format!("{}/{}", crate::organizacao_financeira::service::installment_index(&sm, idx_month), total))
                 }
                 _ => None,
             };
@@ -152,6 +155,7 @@ category_name: r.get(6)?,
                 card_mode: r.get(12)?,
                 in_principal: r.get(13)?,
                 installment,
+                advanced_from,
             })
         })
         .map_err(db_err)?
@@ -190,7 +194,7 @@ pub(crate) fn list_card_bill_transactions(
                     t.category_id, cat.name, t.payment_method_id, pm.name,
                     t.fixed_bill_id, t.loan_id, 0, t.card_mode, t.in_principal,
                     fb.installments, fb.start_month,
-                    cat.icon, cat.color
+                    cat.icon, cat.color, t.advanced_from
              FROM transactions t
              LEFT JOIN categories cat ON cat.id = t.category_id AND cat.deleted_at IS NULL
              LEFT JOIN payment_methods pm ON pm.id = t.payment_method_id AND pm.deleted_at IS NULL
@@ -209,11 +213,13 @@ pub(crate) fn list_card_bill_transactions(
             let date: String = r.get(4)?;
             let installments: Option<i64> = r.get(14)?;
             let start_month: Option<String> = r.get(15)?;
+            let advanced_from: Option<String> = r.get(18)?;
             let installment = match (installments, start_month) {
                 (Some(total), Some(sm)) if total >= 1 => {
+                    let idx_month = advanced_from.as_deref().unwrap_or(&date[..7]);
                     Some(format!(
                         "{}/{}",
-                        crate::organizacao_financeira::service::installment_index(&sm, &date[..7]),
+                        crate::organizacao_financeira::service::installment_index(&sm, idx_month),
                         total
                     ))
                 }
@@ -237,6 +243,7 @@ category_name: r.get(6)?,
                 card_mode: r.get(12)?,
                 in_principal: r.get(13)?,
                 installment,
+                advanced_from,
             })
         })
         .map_err(db_err)?
@@ -368,7 +375,7 @@ pub(crate) fn list_fixed_bills(
     let sql = format!(
         "SELECT b.id, b.description, b.amount, b.day, b.category_id, c.name,
                 b.payment_method_id, pm.name, b.start_month, b.end_month, b.installments, b.purchase_date,
-                c.icon, c.color
+                c.icon, c.color, b.advanced_installments, b.advanced_to
          FROM fixed_bills b
          LEFT JOIN categories c ON c.id = b.category_id AND c.deleted_at IS NULL
          JOIN payment_methods pm ON pm.id = b.payment_method_id AND pm.deleted_at IS NULL
@@ -394,6 +401,8 @@ pub(crate) fn list_fixed_bills(
                 installments: r.get(10)?,
                 purchase_date: r.get(11)?,
                 finished: false,
+                advanced_installments: r.get(14)?,
+                advanced_to: r.get(15)?,
             })
         })
         .map_err(db_err)?

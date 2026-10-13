@@ -7,9 +7,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { CrudRowAction } from "./types";
 
 export function RowActionsMenu<T extends { id: number }>({
-  open, onOpenChange, row, x, y, canEdit, onView, onEdit, onDelete,
+  open, onOpenChange, row, x, y, canEdit, onView, onEdit, onDelete, actions,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -20,6 +21,7 @@ export function RowActionsMenu<T extends { id: number }>({
   onView?: (row: T) => void;
   onEdit?: (row: T) => void;
   onDelete?: (row: T) => void;
+  actions?: CrudRowAction<T>[];
 }) {
   useEffect(() => {
     if (!open) return;
@@ -57,6 +59,18 @@ export function RowActionsMenu<T extends { id: number }>({
             Excluir
           </DropdownMenuItem>
         )}
+        {row && actions
+          ?.filter((a) => !a.visible || a.visible(row))
+          .map((a) => (
+            <DropdownMenuItem
+              key={a.label}
+              variant={a.variant}
+              onClick={() => { onOpenChange(false); a.onSelect(row); }}
+            >
+              {a.icon}
+              {a.label}
+            </DropdownMenuItem>
+          ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );

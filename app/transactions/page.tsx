@@ -61,6 +61,7 @@ function TransactionsContent() {
                 const isReserva = r.type === 4 || r.type === 5
                 if (r.is_card_bill) return <Badge>Fatura</Badge>
                 if (isReserva) return <Badge variant="outline">Reserva</Badge>
+                if (r.type === 6) return <Badge variant="positive">Desconto</Badge>
                 return r.type === 1 ? (
                   <Badge variant="positive">Receita</Badge>
                 ) : (
@@ -81,11 +82,15 @@ function TransactionsContent() {
               mono: true,
               render: (r) => {
                 const positive = r.type === 1 || r.type === 5
+                const discount = r.type === 6
                 return (
                   <span
-                    className={cn(positive ? "text-positive" : "text-negative")}
+                    className={cn(
+                      positive || discount ? "text-positive" : "text-negative"
+                    )}
                   >
-                    {positive ? "+" : "−"} {formatMoney(r.amount)}
+                    {positive || discount ? "+" : "−"}{" "}
+                    {formatMoney(Math.abs(r.amount))}
                   </span>
                 )
               },
@@ -134,14 +139,16 @@ function TransactionsContent() {
               ),
             topRight: (r) => {
               const positive = r.type === 1 || r.type === 5
+              const discount = r.type === 6
               return (
                 <span
                   className={cn(
-                    positive ? "text-positive" : "text-negative",
+                    positive || discount ? "text-positive" : "text-negative",
                     "tabular-nums"
                   )}
                 >
-                  {positive ? "+" : "−"} {formatMoney(r.amount)}
+                  {positive || discount ? "+" : "−"}{" "}
+                  {formatMoney(Math.abs(r.amount))}
                 </span>
               )
             },
@@ -171,7 +178,12 @@ function TransactionsContent() {
             payment_method_id: r.payment_method_id,
             card_mode: r.card_mode,
           }),
-          protected: (r) => r.is_card_bill || r.type === 4 || r.type === 5,
+          protected: (r) =>
+            r.is_card_bill ||
+            r.type === 4 ||
+            r.type === 5 ||
+            r.type === 6 ||
+            r.advanced_from != null,
           loadResources: async () => {
             const [categories, paymentMethods] = await Promise.all([
               categoryApi.list(),

@@ -1,6 +1,6 @@
 use crate::db::{with_db_active, AppState};
 use crate::organizacao_financeira::models::{
-    CardBillDetail, Category, CategoryInput, FixedBill, FixedBillInput, Loan, LoanDetail, LoanInput,
+    AdvancePreview, CardBillDetail, Category, CategoryInput, FixedBill, FixedBillInput, Loan, LoanDetail, LoanInput,
     PaymentMethod, PaymentMethodInput, TransactionInput, TransactionRow,
 };
 use crate::organizacao_financeira::{repository, service};
@@ -173,6 +173,22 @@ pub async fn list_card_bill_transactions(
 
 // ---- fixed_bills ----
 
+fn ensure_not_advanced(c: &rusqlite::Connection, ids: &[i64]) -> Result<(), String> {
+    for id in ids {
+        let adv: i64 = c
+            .query_row(
+                "SELECT advanced_installments FROM fixed_bills WHERE id = ?1",
+                params![id],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        if adv > 0 {
+            return Err("parcelamento com adiantamento não pode ser alterado ou excluído".into());
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn list_fixed_bills(
     state: State<'_, AppState>,
@@ -200,6 +216,7 @@ pub async fn update_fixed_bill(
     mut input: FixedBillInput,
 ) -> Result<(), String> {
     with_db_active(&state, |c, a| {
+        ensure_not_advanced(c, &[id])?;
         service::finalize_installments(c, &mut input)?;
         input.validate()?;
         let affected = c
@@ -240,6 +257,7 @@ pub async fn delete_fixed_bills(state: State<'_, AppState>, ids: Vec<i64>) -> Re
         return Err("ids requeridos".into());
     }
     with_db_active(&state, |c, a| {
+        ensure_not_advanced(c, &ids)?;
         let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
         let placeholders = vec!["?"; ids.len()].join(",");
         // Soft delete transactions linked to these fixed_bills
@@ -267,6 +285,26 @@ pub async fn delete_fixed_bills(state: State<'_, AppState>, ids: Vec<i64>) -> Re
         )
         .map_err(crate::shared::util::db_err)?;
         card_bills::refresh_card_bills(c, a)
+    })
+}
+
+#[tauri::command]
+pub async fn advance_preview(
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<AdvancePreview, String> {
+    with_db_active(&state, |c, a| service::advance_preview(c, a, id))
+}
+
+#[tauri::command]
+pub async fn advance_installments(
+    state: State<'_, AppState>,
+    id: i64,
+    installments_to_advance: i64,
+    discount: i64,
+) -> Result<(), String> {
+    with_db_active(&state, |c, a| {
+        service::advance_installments(c, a, id, installments_to_advance, discount)
     })
 }
 
